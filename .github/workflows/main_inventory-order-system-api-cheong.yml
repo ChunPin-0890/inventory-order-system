@@ -23,11 +23,17 @@ jobs:
         with:
           dotnet-version: '8.x'
 
+      - name: Restore
+        run: dotnet restore backend/InventoryOrderSystem.sln
+
       - name: Build with dotnet
-        run: dotnet build --configuration Release
+        run: dotnet build backend/InventoryOrderSystem.sln --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test backend/InventoryOrderSystem.sln --configuration Release --no-build --verbosity normal
 
       - name: dotnet publish
-        run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/myapp
+        run: dotnet publish backend/InventoryOrderSystem.Api/InventoryOrderSystem.Api.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp --no-build
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
