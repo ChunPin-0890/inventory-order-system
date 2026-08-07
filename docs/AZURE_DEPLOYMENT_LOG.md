@@ -188,6 +188,80 @@ matching GitHub Actions secret (`Settings → Secrets and variables → Actions`
 then re-ran the failed job (no new push needed — GitHub Actions supports re-running a past
 run's failed jobs in place).
 
+### GitHub-wide platform outage
+
+While working through the above, hit a stretch where every run failed identically with
+"Service Unavailable" / "Failed to resolve action download info," even for jobs that never
+reached our own code. Checked [githubstatus.com](https://www.githubstatus.com) and confirmed
+an active, GitHub-wide incident affecting Actions (started 15:22 UTC, mitigated a few hours
+later). No fix needed on our end — just waited for GitHub's own engineers to resolve it, then
+re-ran the affected jobs.
+
+### The federated credential subject format changed again
+
+Even after fixing the credential once, the *next* deploy attempt failed again with the same
+`AADSTS700213` error — but this time the presented subject in the error log was:
+```
+repo:ChunPin-0890@117339819/inventory-order-system@1325401235:ref:refs/heads/main
+```
+Note the `@117339819` (GitHub user ID) and `@1325401235` (repo ID) — GitHub had switched to a
+newer "immutable ID" subject format (the same one a warning banner had mentioned earlier), and
+the federated credential was still configured with the old plain-slug format.
+
+**Fix**: Edited the federated credential again, this time filling in the previously-optional
+**Organization ID** and **Repository ID** fields (`117339819` / `1325401235`), which
+regenerated the subject identifier to match the new ID-based format exactly.
+
+### Wrong assumed backend hostname
+
+After the backend finally deployed successfully, hitting the "obvious" URL
+(`inventory-order-system-api-cheong.azurewebsites.net`) returned `DNS_PROBE_FINISHED_NXDOMAIN`
+— that hostname doesn't exist. Because **"Secure unique default hostname"** was enabled during
+App Service creation (a security feature preventing subdomain-takeover attacks), the *real*
+hostname has a random suffix:
+```
+inventory-order-system-api-cheong-deavayc8drbff0d2.southeastasia-01.azurewebsites.net
+```
+**Fix**: Found the real hostname on the App Service's own Overview page, and updated every
+place it was referenced (the frontend's `VITE_API_BASE_URL` build-time variable, this log).
+
+### Frontend deployed raw source instead of the built bundle
+
+The first successful-looking Static Web App deploy actually served a blank page. Inspecting
+network requests showed the browser requesting `/src/main.tsx` directly — Vite's raw source
+entry point, not a compiled bundle. The auto-generated workflow relied on Azure's "Oryx"
+build-detection to run `npm run build` automatically; Oryx silently skipped the build (no
+`oryx`/`vite build` mentions anywhere in the job logs) and just uploaded the raw `frontend/`
+folder as static files instead.
+
+**Root cause once found**: `npm run build` was actually failing locally too, on an unused
+`within` import in a test file (`tsc -b` fails the whole build on any TypeScript error,
+including in test files caught by the same tsconfig). Oryx's build likely hit the same failure
+and fell back to serving unbuilt source rather than surfacing the error.
+
+**Fix**: Removed the unused import; rewrote the workflow to explicitly run
+`npm ci && npm run build` ourselves in a dedicated step, then pointed the deploy action at the
+already-built `frontend/dist` with `skip_app_build: true` — removing the dependency on Oryx's
+auto-detection entirely.
+
+### Azure SQL firewall didn't actually cover the App Service's outbound IP
+
+Backend deployed and started successfully (`/health` returned 200), but every endpoint that
+touched the database returned 503. The Runtime log stream showed the real exception:
+```
+Microsoft.Data.SqlClient.SqlException: Cannot open server 'inventory-order-system-cheong2'
+requested by the login. Client with IP address '20.205.241.129' is not allowed to access
+the server.
+```
+The earlier manual `0.0.0.0`-`0.0.0.0` "allow Azure services" firewall rule wasn't being
+honored the same way the official toggle is.
+
+**Fix**: Added an explicit firewall rule for the App Service's actual outbound IP
+(`20.205.241.129`) directly on the SQL Server's Networking blade, alongside re-confirming the
+"Allow Azure services and resources to access this server" toggle. Verified immediately after:
+`/api/products` returned real data from Azure SQL, and the live frontend rendered it correctly
+end-to-end.
+
 ---
 
 ## Summary of issues hit and fixed
@@ -201,7 +275,14 @@ run's failed jobs in place).
 | 5 | Deployment Center "Service unavailable" | Transient Azure portal backend issue | Retried after 30s per the portal's own guidance |
 | 6 | First GitHub Actions run failed in 19s | Auto-generated workflow assumed project at repo root | Edited workflow to point at `backend/InventoryOrderSystem.Api/` |
 | 7 | Azure login step failed (`AADSTS700213`) | GitHub secret pointed at a broken leftover Managed Identity from the earlier failed save attempt | Found the identity with a valid federated credential, updated the GitHub secret to its Client ID |
+| 8 | Every workflow run failing platform-wide | Active GitHub-wide Actions outage (confirmed via status page) | Waited for GitHub to mitigate, then re-ran |
+| 9 | Same `AADSTS700213` error, different subject | GitHub switched to an ID-based subject format (`user@id/repo@id`); credential still used the old plain-slug format | Filled in Organization ID / Repository ID on the federated credential to regenerate the correct subject |
+| 10 | Backend URL returned `DNS_PROBE_FINISHED_NXDOMAIN` | "Secure unique default hostname" appends a random suffix; the assumed simple hostname never existed | Found the real hostname on the App Service Overview page, updated every reference to it |
+| 11 | Frontend deployed a blank page (`/src/main.tsx` served raw) | Oryx's automatic build silently failed/skipped due to a TypeScript error in a test file, deploying unbuilt source instead | Fixed the TS error; rewrote the workflow to build explicitly ourselves and skip Oryx's auto-build |
+| 12 | Backend live but every DB-backed endpoint returned 503 | Azure SQL firewall didn't actually cover the App Service's real outbound IP, despite an earlier "allow Azure services" rule | Added an explicit firewall rule for the exact outbound IP shown in the SQL exception log |
 
-Seven distinct, non-trivial issues, each diagnosed from the actual error message rather than
-guessed at — this is good material for "tell me about a time you debugged a hard production
-issue" in an interview, precisely because none of it was scripted or clean.
+Twelve distinct, non-trivial issues, each diagnosed from the actual error message/log rather
+than guessed at — this is good material for "tell me about a time you debugged a hard
+production issue" in an interview, precisely because none of it was scripted or clean. The
+project ended the night fully live end-to-end: real data flowing from Azure SQL, through the
+.NET backend, to the deployed React frontend.
