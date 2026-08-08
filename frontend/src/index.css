@@ -231,6 +231,26 @@ body {
   font-size: 0.95rem;
 }
 
+.description-field { grid-column: 1 / -1; }
+
+.description-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.description-row textarea {
+  flex: 1;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.95rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

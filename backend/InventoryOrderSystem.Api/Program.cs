@@ -43,6 +43,7 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddHttpClient<IProductDescriptionService, ProductDescriptionService>();
 
 // --- JWT authentication ---
 var jwtKey = builder.Configuration["Jwt:Key"]

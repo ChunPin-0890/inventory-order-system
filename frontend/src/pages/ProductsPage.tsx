@@ -7,6 +7,7 @@ import {
   reactivateProduct,
 } from '../api/products';
 import { createCategory, getCategories } from '../api/categories';
+import { generateProductDescription } from '../api/ai';
 import type { Category, CreateProductRequest, Product } from '../types';
 import { useAuth } from '../auth/AuthContext';
 
@@ -33,6 +34,7 @@ export default function ProductsPage() {
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [showInactive, setShowInactive] = useState(false);
+  const [generatingDescription, setGeneratingDescription] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -69,6 +71,30 @@ export default function ProductsPage() {
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
         (err instanceof Error ? err.message : 'Failed to create product');
       setError(message);
+    }
+  }
+
+  async function handleGenerateDescription() {
+    if (!form.name.trim()) {
+      setError('Enter a product name first so the AI has something to describe.');
+      return;
+    }
+    const categoryName = categories.find((c) => c.id === form.categoryId)?.name ?? '';
+    setGeneratingDescription(true);
+    try {
+      const description = await generateProductDescription({
+        productName: form.name,
+        categoryName,
+      });
+      setForm((f) => ({ ...f, description }));
+      setError(null);
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        (err instanceof Error ? err.message : 'Failed to generate description');
+      setError(message);
+    } finally {
+      setGeneratingDescription(false);
     }
   }
 
@@ -143,6 +169,25 @@ export default function ProductsPage() {
           <label>
             Name
             <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </label>
+          <label className="description-field">
+            Description
+            <div className="description-row">
+              <textarea
+                rows={2}
+                value={form.description}
+                placeholder="Optional — write your own, or generate one with AI"
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+              />
+              <button
+                type="button"
+                className="btn small"
+                onClick={handleGenerateDescription}
+                disabled={generatingDescription}
+              >
+                {generatingDescription ? 'Generating…' : '✨ Generate'}
+              </button>
+            </div>
           </label>
           <label>
             Category
