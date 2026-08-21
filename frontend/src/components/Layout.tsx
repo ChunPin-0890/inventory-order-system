@@ -20,6 +20,7 @@ export default function Layout() {
           {isAuthenticated && <NavLink to="/dashboard" className={navLinkClass}>Dashboard</NavLink>}
           <NavLink to="/products" className={navLinkClass}>Products</NavLink>
           {isAuthenticated && <NavLink to="/orders" className={navLinkClass}>Orders</NavLink>}
+          {isAuthenticated && <NavLink to="/stock-movements" className={navLinkClass}>Stock Movements</NavLink>}
           {isAuthenticated && <NavLink to="/purchase-orders" className={navLinkClass}>Purchase Orders</NavLink>}
           {isAuthenticated && <NavLink to="/suppliers" className={navLinkClass}>Suppliers</NavLink>}
         </nav>

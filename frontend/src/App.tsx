@@ -5,6 +5,7 @@ import ProductsPage from './pages/ProductsPage';
 import OrdersPage from './pages/OrdersPage';
 import PurchaseOrdersPage from './pages/PurchaseOrdersPage';
 import SuppliersPage from './pages/SuppliersPage';
+import StockMovementsPage from './pages/StockMovementsPage';
 import LoginPage from './pages/LoginPage';
 import ProtectedRoute from './auth/ProtectedRoute';
 import RootIndex from './auth/RootIndex';
@@ -30,6 +31,14 @@ function App() {
           element={
             <ProtectedRoute>
               <OrdersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="stock-movements"
+          element={
+            <ProtectedRoute>
+              <StockMovementsPage />
             </ProtectedRoute>
           }
         />

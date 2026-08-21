@@ -337,6 +337,11 @@ body {
    (Received ~ Completed, Cancelled is shared) and add two of their own. */
 .status-draft { background: #e5e7eb; color: #374151; }
 .status-ordered { background: #fef3c7; color: #92400e; }
+
+/* Stock movement types */
+.status-stockin { background: #dcfce7; color: #166534; }
+.status-stockout { background: #fee2e2; color: #991b1b; }
+.status-adjustment { background: #dbeafe; color: #1e40af; }
 .status-received { background: #dcfce7; color: #166534; }
 
 .po-lines { display: flex; flex-direction: column; gap: 0.5rem; margin: 0.6rem 0; }

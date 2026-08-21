@@ -107,3 +107,16 @@ export interface CreatePurchaseOrderRequest {
 export interface ReceivePurchaseOrderRequest {
   lines: { purchaseOrderItemId: number; receivedQuantity: number }[];
 }
+
+export type StockMovementType = 'StockIn' | 'StockOut' | 'Adjustment';
+
+export interface StockMovement {
+  id: number;
+  productId: number;
+  productName: string;
+  type: StockMovementType;
+  quantity: number;
+  reason?: string | null;
+  orderId?: number | null;
+  createdAt: string;
+}

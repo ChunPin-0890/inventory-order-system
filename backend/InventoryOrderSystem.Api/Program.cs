@@ -45,6 +45,7 @@ builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
+builder.Services.AddScoped<IStockMovementService, StockMovementService>();
 builder.Services.AddHttpClient<IProductDescriptionService, ProductDescriptionService>();
 
 // --- JWT authentication ---
