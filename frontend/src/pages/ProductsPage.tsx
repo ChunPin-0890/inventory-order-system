@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   adjustStock,
   createProduct,
@@ -281,19 +282,22 @@ export default function ProductsPage() {
                 <td>{!p.isActive ? 'Inactive' : p.isLowStock ? '⚠️ Low Stock' : 'OK'}</td>
                 <td className="actions">
                   {isAuthenticated ? (
-                    p.isActive ? (
-                      <>
-                        <button className="btn small" onClick={() => handleAdjust(p, 10)}>+10</button>
-                        <button className="btn small" onClick={() => handleAdjust(p, -1)}>-1</button>
-                        {isAdmin && (
-                          <button className="btn small danger" onClick={() => handleDeactivate(p)}>Deactivate</button>
-                        )}
-                      </>
-                    ) : (
-                      isAdmin && (
-                        <button className="btn small" onClick={() => handleReactivate(p)}>Reactivate</button>
-                      )
-                    )
+                    <>
+                      <Link className="btn small" to={`/stock-movements?productId=${p.id}`}>History</Link>
+                      {p.isActive ? (
+                        <>
+                          <button className="btn small" onClick={() => handleAdjust(p, 10)}>+10</button>
+                          <button className="btn small" onClick={() => handleAdjust(p, -1)}>-1</button>
+                          {isAdmin && (
+                            <button className="btn small danger" onClick={() => handleDeactivate(p)}>Deactivate</button>
+                          )}
+                        </>
+                      ) : (
+                        isAdmin && (
+                          <button className="btn small" onClick={() => handleReactivate(p)}>Reactivate</button>
+                        )
+                      )}
+                    </>
                   ) : (
                     <span className="minisub">—</span>
                   )}

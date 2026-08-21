@@ -123,6 +123,23 @@ body {
   color: var(--color-muted);
 }
 
+.inline-select {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+.inline-select select {
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
 .row-inactive { opacity: 0.55; }
 
 .new-category-row {

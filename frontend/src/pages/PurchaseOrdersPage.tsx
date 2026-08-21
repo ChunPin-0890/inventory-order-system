@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   cancelPurchaseOrder,
   createPurchaseOrder,
@@ -8,7 +8,7 @@ import {
 } from '../api/purchaseOrders';
 import { getSuppliers } from '../api/suppliers';
 import { getProducts } from '../api/products';
-import type { CreatePurchaseOrderRequest, PurchaseOrder, Product, Supplier } from '../types';
+import type { CreatePurchaseOrderRequest, PurchaseOrder, PurchaseOrderStatus, Product, Supplier } from '../types';
 import { useAuth } from '../auth/AuthContext';
 
 interface DraftLine {
@@ -20,6 +20,14 @@ function emptyLines(): DraftLine[] {
   return [{ productId: '', quantity: 1 }];
 }
 
+const STATUS_FILTER_OPTIONS: { value: PurchaseOrderStatus | ''; label: string }[] = [
+  { value: '', label: 'All statuses' },
+  { value: 'Draft', label: 'Draft' },
+  { value: 'Ordered', label: 'Ordered' },
+  { value: 'Received', label: 'Received' },
+  { value: 'Cancelled', label: 'Cancelled' },
+];
+
 export default function PurchaseOrdersPage() {
   const { isAuthenticated, isAdmin } = useAuth();
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
@@ -27,6 +35,7 @@ export default function PurchaseOrdersPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<PurchaseOrderStatus | ''>('');
 
   const [showForm, setShowForm] = useState(false);
   const [supplierId, setSupplierId] = useState<number | ''>('');
@@ -35,6 +44,11 @@ export default function PurchaseOrdersPage() {
 
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [receiveQty, setReceiveQty] = useState<Record<number, number>>({});
+
+  const filteredPurchaseOrders = useMemo(
+    () => (statusFilter ? purchaseOrders.filter((po) => po.status === statusFilter) : purchaseOrders),
+    [purchaseOrders, statusFilter],
+  );
 
   async function refresh() {
     setLoading(true);
@@ -168,11 +182,21 @@ export default function PurchaseOrdersPage() {
     <div>
       <div className="page-header">
         <h1>Purchase Orders</h1>
-        {isAuthenticated && (
-          <button className="btn primary" onClick={() => setShowForm((s) => !s)}>
-            {showForm ? 'Cancel' : '+ New PO'}
-          </button>
-        )}
+        <div className="header-actions">
+          <label className="inline-select">
+            Status:{' '}
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as PurchaseOrderStatus | '')}>
+              {STATUS_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </label>
+          {isAuthenticated && (
+            <button className="btn primary" onClick={() => setShowForm((s) => !s)}>
+              {showForm ? 'Cancel' : '+ New PO'}
+            </button>
+          )}
+        </div>
       </div>
 
       {error && <p className="error-banner">{error}</p>}
@@ -241,7 +265,7 @@ export default function PurchaseOrdersPage() {
             </tr>
           </thead>
           <tbody>
-            {purchaseOrders.map((po) => (
+            {filteredPurchaseOrders.map((po) => (
               <Fragment key={po.id}>
                 <tr>
                   <td>{po.poNumber}</td>
@@ -305,9 +329,11 @@ export default function PurchaseOrdersPage() {
                 )}
               </Fragment>
             ))}
-            {purchaseOrders.length === 0 && (
+            {filteredPurchaseOrders.length === 0 && (
               <tr>
-                <td colSpan={6} className="empty-state">No purchase orders yet. Create one above.</td>
+                <td colSpan={6} className="empty-state">
+                  {statusFilter ? `No ${statusFilter.toLowerCase()} purchase orders.` : 'No purchase orders yet. Create one above.'}
+                </td>
               </tr>
             )}
           </tbody>

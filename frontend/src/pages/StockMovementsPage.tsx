@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getStockMovements } from '../api/stockMovements';
 import { getProducts } from '../api/products';
 import type { Product, StockMovement, StockMovementType } from '../types';
@@ -11,12 +12,17 @@ const TYPE_OPTIONS: { value: StockMovementType | ''; label: string }[] = [
 ];
 
 export default function StockMovementsPage() {
+  // Supports arriving pre-filtered via "View history" links elsewhere in the app,
+  // e.g. /stock-movements?productId=3 — read once on mount, not kept in sync after.
+  const [searchParams] = useSearchParams();
+  const initialProductId = searchParams.get('productId');
+
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [productId, setProductId] = useState<number | ''>('');
+  const [productId, setProductId] = useState<number | ''>(initialProductId ? Number(initialProductId) : '');
   const [type, setType] = useState<StockMovementType | ''>('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
