@@ -3,6 +3,8 @@ import Layout from './components/Layout';
 import DashboardPage from './pages/DashboardPage';
 import ProductsPage from './pages/ProductsPage';
 import OrdersPage from './pages/OrdersPage';
+import PurchaseOrdersPage from './pages/PurchaseOrdersPage';
+import SuppliersPage from './pages/SuppliersPage';
 import LoginPage from './pages/LoginPage';
 import ProtectedRoute from './auth/ProtectedRoute';
 import RootIndex from './auth/RootIndex';
@@ -28,6 +30,22 @@ function App() {
           element={
             <ProtectedRoute>
               <OrdersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="purchase-orders"
+          element={
+            <ProtectedRoute>
+              <PurchaseOrdersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="suppliers"
+          element={
+            <ProtectedRoute>
+              <SuppliersPage />
             </ProtectedRoute>
           }
         />

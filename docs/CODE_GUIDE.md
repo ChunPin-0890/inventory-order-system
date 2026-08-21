@@ -8,7 +8,7 @@ Layout:
 - **Backend** (`backend/InventoryOrderSystem.Api`) — .NET 8 Web API
 - **Backend Tests** (`backend/InventoryOrderSystem.Tests`) — xUnit
 - **Frontend** (`frontend/src`) — React + TypeScript
-
+```````````````````````````````````````````````````````
 ---
 
 ## BACKEND
@@ -614,6 +614,72 @@ current state of the resource."
 
 **`CategoriesController.cs`** — same pattern as the others: public `GET`, authenticated `POST`.
 
+**`AiController.cs`**
+```csharp
+[HttpPost("generate-description")]
+public async Task<ActionResult<GenerateDescriptionResponse>> GenerateDescription(
+    GenerateDescriptionRequest request, CancellationToken ct)
+{
+    try
+    {
+        var result = await _service.GenerateAsync(request, ct);
+        return Ok(result);
+    }
+    catch (InvalidOperationException ex)
+    {
+        return BadRequest(new { message = ex.Message });
+    }
+}
+```
+Requires auth (`[Authorize]` at class level, no role restriction — any signed-in user, not just
+Admin). Same thin-controller pattern as everywhere else: no prompt-building or HTTP-to-the-LLM
+logic here, that's all in the service. `CancellationToken ct` is threaded through so that if the
+browser request is cancelled (user navigates away), the in-flight call to the LLM provider is
+cancelled too instead of running to completion pointlessly.
+
+**`ProductDescriptionService.cs`** — calls Groq's OpenAI-compatible Chat Completions API directly
+via a typed `HttpClient` (`AddHttpClient<IProductDescriptionService, ProductDescriptionService>()`
+in `Program.cs`, so the framework injects an `HttpClient` with connection pooling handled for us).
+
+```csharp
+var section = _config.GetSection("Groq");
+var apiKey = section["ApiKey"];
+var model = section["Model"] ?? "llama-3.3-70b-versatile";
+
+if (string.IsNullOrWhiteSpace(apiKey))
+{
+    throw new InvalidOperationException(
+        "Groq is not configured. Set Groq:ApiKey ... via user-secrets locally or App Service settings in production.");
+}
+```
+Same `IConfiguration`-reads-directly pattern as `TokenService`'s JWT settings. Fails **before**
+making any network call if unconfigured — this is why a misconfigured deployment gives a clear
+`400 Bad Request` with an explicit message, not a confusing timeout or 500.
+
+```csharp
+var prompt = $"Write a concise, appealing e-commerce product description (2-3 sentences, no headings) " +
+    $"for a product named \"{request.ProductName}\" in the category \"{request.CategoryName}\"." +
+    (string.IsNullOrWhiteSpace(request.Keywords) ? "" : $" Emphasize these details: {request.Keywords}.");
+```
+Prompt assembly: a fixed instruction template with the product's actual name/category/keywords
+interpolated in. The conditional keywords clause only appends if keywords were actually provided
+— avoids sending a dangling "Emphasize these details: " with nothing after it.
+
+```csharp
+using var doc = JsonDocument.Parse(body);
+var description = doc.RootElement
+    .GetProperty("choices")[0]
+    .GetProperty("message")
+    .GetProperty("content")
+    .GetString()
+    ?? throw new InvalidOperationException("Groq returned an empty response.");
+```
+Manual JSON parsing (`JsonDocument`, not a strongly-typed response class) — a deliberate choice
+for a response shape only used in one place; navigates straight to
+`choices[0].message.content`, which is the standard shape shared by every OpenAI-compatible chat
+API (this is *why* swapping between Groq/Azure OpenAI/other providers only ever required changing
+the URL and auth header, not this parsing logic).
+
 ---
 
 ## BACKEND TESTS
@@ -702,6 +768,22 @@ runs after every response; if the server ever says 401 Unauthorized (expired/inv
 clears the stored session and force-redirects to `/login` — a global "you got logged out"
 handler in one place, rather than repeated in every component.
 
+### `api/ai.ts`
+```ts
+export async function generateProductDescription(
+  request: GenerateDescriptionRequest,
+): Promise<string> {
+  const { data } = await apiClient.post<{ description: string }>(
+    '/api/ai/generate-description',
+    request,
+  );
+  return data.description;
+}
+```
+Same thin-wrapper pattern as every other `api/*.ts` file below — one function per endpoint,
+typed request/response, no logic beyond the HTTP call itself. Returns just the `description`
+string (unwraps the `{ description }` envelope) so the calling component doesn't have to.
+
 ### `api/products.ts`, `api/orders.ts`, `api/auth.ts`, `api/categories.ts`
 
 Each is a thin wrapper: one function per backend endpoint, typed with the shared TypeScript
@@ -772,17 +854,49 @@ authenticated; otherwise it redirects to `/login`, remembering where they were t
 ```tsx
 export default function RootIndex() {
   const { isAuthenticated } = useAuth();
-  return <Navigate to={isAuthenticated ? '/dashboard' : '/products'} replace />;
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+  return <LandingPage />;
 }
 ```
-Handles the `/` route: authenticated users land on the Dashboard, guests land on the public
-Products page — this is what makes guest mode "just work" without a login wall on first visit.
+Handles the `/` route: authenticated users are redirected straight to the Dashboard; guests see
+the `LandingPage` component rendered in place (not a redirect) — so `/` is a real page for
+guests, not a bounce to `/products`. This changed from an earlier version that redirected guests
+straight to Products; the landing page gives first-time visitors (portfolio reviewers, in
+practice) a pitch before dropping them into the app.
+
+### `pages/LandingPage.tsx` — the guest-facing pitch at `/`
+
+```tsx
+const TECH_STACK = ['React', 'TypeScript', '.NET 8', 'EF Core', 'Azure SQL', 'Azure App Service', 'GitHub Actions'];
+const HIGHLIGHTS = [ /* 4 objects: { title, body } */ ];
+
+export default function LandingPage() {
+  return (
+    <div className="landing">
+      <section className="landing-hero"> ... </section>
+      <section className="landing-highlights">
+        {HIGHLIGHTS.map((h) => (
+          <div key={h.title} className="panel highlight-card">
+            <h2>{h.title}</h2><p>{h.body}</p>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+```
+No state, no API calls — a pure presentational component. `TECH_STACK` and `HIGHLIGHTS` are
+plain data arrays rendered via `.map()` rather than four hand-written `<div>` blocks, so adding a
+fifth highlight is a one-line array edit. Uses React Router's `<Link>` for the CTAs
+(`Browse as Guest` → `/products`, `Sign in` → `/login`) instead of `<a href>`, keeping navigation
+client-side (no full page reload, auth state in memory survives).
 
 ### `App.tsx` — route definitions
 ```tsx
 <Routes>
   <Route path="/login" element={<LoginPage />} />
   <Route path="/" element={<Layout />}>
+    {/* Guests see LandingPage here (via RootIndex); signed-in users are redirected to Dashboard */}
     <Route index element={<RootIndex />} />
     <Route path="products" element={<ProductsPage />} />
     <Route path="dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
@@ -794,7 +908,8 @@ Nested routes: `Layout` (the header/nav/footer shell) wraps every page except `/
 renders whichever child route matched via its `<Outlet />`. Notice `products` has **no**
 `ProtectedRoute` wrapper (public), while `dashboard` and `orders` do (require login) — this is
 the routing-level half of guest mode; the other half is each page component individually
-checking `isAuthenticated` to hide action buttons.
+checking `isAuthenticated` to hide action buttons. `index` doesn't render a page directly — it
+renders `RootIndex`, which decides *which* page to show (see above).
 
 ### `components/Layout.tsx`
 ```tsx
@@ -813,6 +928,47 @@ checking `isAuthenticated` to hide action buttons.
 Conditional rendering based on auth state — the whole top-right corner of the nav bar switches
 between "logged in" and "guest" presentation from the same component, driven entirely by
 `useAuth()`.
+
+### `pages/DashboardPage.tsx` — charts and derived stats
+
+```tsx
+useEffect(() => {
+  Promise.all([getProducts(), getOrders()])
+    .then(([p, o]) => { setProducts(p); setOrders(o); })
+    .catch(() => setError('Could not reach the API. Is the backend running?'))
+    .finally(() => setLoading(false));
+}, []);
+```
+`Promise.all` fires both fetches concurrently rather than awaiting one then the other — the
+same "don't wait sequentially for independent requests" pattern used in `ProductsPage.refresh()`.
+
+```tsx
+const stockByCategory = useMemo(() => {
+  const totals = new Map<string, number>();
+  for (const p of products) {
+    totals.set(p.categoryName, (totals.get(p.categoryName) ?? 0) + p.quantityOnHand);
+  }
+  return Array.from(totals.entries()).map(([category, quantity]) => ({ category, quantity }));
+}, [products]);
+```
+Reshapes the raw `Product[]` into the `{ category, quantity }[]` shape recharts expects, grouped
+and summed via a `Map` accumulator. Wrapped in `useMemo` with `[products]` as the dependency:
+this recalculates only when `products` itself changes, not on every render (e.g. not when
+`loading`/`error` change) — and it keeps the array reference stable across unrelated re-renders,
+which matters because recharts treats a new array reference as "data changed."
+
+```tsx
+const lowStock = products.filter((p) => p.isLowStock);
+const pendingOrders = orders.filter((o) => o.status === 'Pending');
+const totalRevenue = orders
+  .filter((o) => o.status !== 'Cancelled')
+  .reduce((sum, o) => sum + o.totalAmount, 0);
+```
+These three are **not** memoized, computed fresh every render — deliberately different treatment
+from `stockByCategory` above. They're cheap (`.filter`/`.reduce` over an already-small array) and
+don't feed a library that cares about reference identity, so the `useMemo` overhead wouldn't earn
+its keep here. Worth being able to explain *why* these three don't need it while the chart data
+does — it's not an inconsistency, it's matching the tool to the actual cost/benefit.
 
 ### `pages/ProductsPage.tsx` — the most feature-dense page
 
@@ -856,6 +1012,29 @@ Nested conditional rendering: guests see a dash, authenticated users see stock-a
 (and Admins additionally see Deactivate), inactive products (only visible to Admins with the
 toggle on) show Reactivate instead. This is UI-layer role enforcement — remember, it's *only*
 a convenience; the real enforcement is the `[Authorize(Roles = "Admin")]` on the backend.
+
+```tsx
+async function handleGenerateDescription() {
+  if (!form.name.trim()) {
+    setError('Enter a product name first so the AI has something to describe.');
+    return;
+  }
+  const categoryName = categories.find((c) => c.id === form.categoryId)?.name ?? '';
+  setGeneratingDescription(true);
+  try {
+    const description = await generateProductDescription({ productName: form.name, categoryName });
+    setForm((f) => ({ ...f, description }));
+    setError(null);
+  } catch (err: unknown) { /* extract .response.data.message, fall back to err.message */ }
+  finally { setGeneratingDescription(false); }
+}
+```
+The AI "✨ Generate" button's handler. Fails fast client-side (empty-name check) before spending
+an API call on nothing. `categories.find(c => c.id === form.categoryId)?.name` resolves the
+selected category's *name* from its *id* — the form only stores the id, but the AI prompt wants
+a human-readable category. Writes the result straight into `form.description` via the same
+`setForm({...f, field: value})` pattern used throughout this form — no separate preview/accept
+step, one click does the whole thing.
 
 ### `pages/OrdersPage.tsx` — multi-item order form + search
 
@@ -940,4 +1119,10 @@ JavaScript or per-component dark-mode logic.
 - **DTOs vs entities** — never expose your database shape directly over the network.
 - **JWT auth** — stateless, signed tokens carrying identity + role claims.
 - **React Context** (`AuthContext`) — share state across the tree without prop drilling.
+- **`useMemo` vs. plain computation** (`DashboardPage`) — memoize when output feeds a
+  reference-sensitive child (charts) or the computation is non-trivial; skip it for cheap,
+  render-local derivations.
+- **LLM API integration** (`ProductDescriptionService`) — fail fast before the network call if
+  unconfigured; parse only the fields you need from a standard OpenAI-compatible response shape,
+  which is what makes swapping providers (Groq/Azure OpenAI/others) a config change, not a rewrite.
 - **Debouncing** (search box) — delay expensive work until input settles.

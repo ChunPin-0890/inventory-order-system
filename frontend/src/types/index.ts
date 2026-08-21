@@ -60,3 +60,50 @@ export interface AuthUser {
   token: string;
   expiresAt: string;
 }
+
+export interface Supplier {
+  id: number;
+  name: string;
+  contactName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+}
+
+export interface CreateSupplierRequest {
+  name: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+}
+
+export type PurchaseOrderStatus = 'Draft' | 'Ordered' | 'Received' | 'Cancelled';
+
+export interface PurchaseOrderItem {
+  id: number;
+  productId: number;
+  productName: string;
+  orderedQuantity: number;
+  receivedQuantity: number;
+}
+
+export interface PurchaseOrder {
+  id: number;
+  poNumber: string;
+  supplierId: number;
+  supplierName: string;
+  status: PurchaseOrderStatus;
+  createdAt: string;
+  orderedAt?: string | null;
+  expectedAt?: string | null;
+  items: PurchaseOrderItem[];
+}
+
+export interface CreatePurchaseOrderRequest {
+  supplierId: number;
+  expectedAt?: string | null;
+  items: { productId: number; quantity: number }[];
+}
+
+export interface ReceivePurchaseOrderRequest {
+  lines: { purchaseOrderItemId: number; receivedQuantity: number }[];
+}

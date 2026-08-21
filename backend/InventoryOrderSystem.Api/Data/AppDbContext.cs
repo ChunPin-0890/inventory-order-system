@@ -13,6 +13,9 @@ public class AppDbContext : DbContext
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Category> Categories => Set<Category>();
+    public DbSet<Supplier> Suppliers => Set<Supplier>();
+    public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
+    public DbSet<PurchaseOrderItem> PurchaseOrderItems => Set<PurchaseOrderItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -45,6 +48,18 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<StockMovement>(e =>
         {
             e.HasOne(sm => sm.Product).WithMany(p => p.StockMovements).HasForeignKey(sm => sm.ProductId);
+        });
+
+        modelBuilder.Entity<PurchaseOrder>(e =>
+        {
+            e.HasIndex(po => po.PoNumber).IsUnique();
+            e.HasOne(po => po.Supplier).WithMany(s => s.PurchaseOrders).HasForeignKey(po => po.SupplierId);
+        });
+
+        modelBuilder.Entity<PurchaseOrderItem>(e =>
+        {
+            e.HasOne(poi => poi.PurchaseOrder).WithMany(po => po.Items).HasForeignKey(poi => poi.PurchaseOrderId);
+            e.HasOne(poi => poi.Product).WithMany().HasForeignKey(poi => poi.ProductId);
         });
 
         modelBuilder.Entity<User>(e =>
