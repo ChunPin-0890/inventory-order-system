@@ -31,7 +31,9 @@ public class ProductDescriptionService : IProductDescriptionService
 
         var section = _config.GetSection("Groq");
         var apiKey = section["ApiKey"];
-        var model = section["Model"] ?? "llama-3.3-70b-versatile";
+        // llama-3.3-70b-versatile was deprecated by Groq on 2026-06-17; openai/gpt-oss-120b is
+        // their recommended replacement for that model tier.
+        var model = section["Model"] ?? "openai/gpt-oss-120b";
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
