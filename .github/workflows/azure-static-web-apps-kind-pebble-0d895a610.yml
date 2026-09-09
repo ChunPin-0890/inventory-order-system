@@ -25,16 +25,24 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      # Test gate: fail the job (and skip deploy below) before spending time on a build
+      # if the vitest suite (auth guarding, page rendering) doesn't pass.
+      - name: Run tests
+        working-directory: ./frontend
+        run: npm test
+
       # Build explicitly ourselves rather than relying on Azure/static-web-apps-deploy's
       # automatic Oryx build detection, which silently skipped the build entirely and
       # deployed raw unbuilt source (/src/main.tsx) instead of the compiled dist/ output.
-      - name: Install dependencies and build frontend
+      - name: Build frontend
         working-directory: ./frontend
         env:
           VITE_API_BASE_URL: https://inventory-order-system-api-cheong-deavayc8drbff0d2.southeastasia-01.azurewebsites.net
-        run: |
-          npm ci
-          npm run build
+        run: npm run build
 
       - name: Deploy to Azure Static Web Apps
         id: builddeploy
