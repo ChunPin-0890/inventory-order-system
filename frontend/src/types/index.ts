@@ -15,6 +15,7 @@ export interface Product {
   reorderThreshold: number;
   isLowStock: boolean;
   isActive: boolean;
+  createdAt: string;
 }
 
 export interface CreateProductRequest {

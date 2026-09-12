@@ -17,7 +17,7 @@ const mockSuppliers: Supplier[] = [{ id: 1, name: 'Acme Components', contactName
 const mockProducts: Product[] = [
   {
     id: 1, sku: 'SKU-A', name: 'Widget A', description: null, categoryId: 1, categoryName: 'Hardware',
-    unitPrice: 5, quantityOnHand: 10, reorderThreshold: 2, isLowStock: false, isActive: true,
+    unitPrice: 5, quantityOnHand: 10, reorderThreshold: 2, isLowStock: false, isActive: true, createdAt: '2026-01-01T00:00:00Z',
   },
 ];
 

@@ -13,7 +13,7 @@ public class ProductService : IProductService
 
     private static ProductDto ToDto(Product p) => new(
         p.Id, p.Sku, p.Name, p.Description, p.CategoryId, p.Category?.Name ?? string.Empty, p.UnitPrice,
-        p.QuantityOnHand, p.ReorderThreshold, p.QuantityOnHand <= p.ReorderThreshold, p.IsActive);
+        p.QuantityOnHand, p.ReorderThreshold, p.QuantityOnHand <= p.ReorderThreshold, p.IsActive, p.CreatedAt);
 
     public async Task<List<ProductDto>> GetAllAsync(int? categoryId = null, bool? lowStockOnly = null, bool includeInactive = false)
     {

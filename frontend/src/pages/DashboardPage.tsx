@@ -19,12 +19,45 @@ import type { Order, OrderStatus, Product } from "../types";
 // Same palette used for the status badges elsewhere in the app, so the chart
 // and the table rows read as one consistent visual language.
 const STATUS_COLORS: Record<OrderStatus, string> = {
-  Pending: "#f59e0b",
-  Confirmed: "#3b82f6",
-  Shipped: "#6366f1",
-  Completed: "#22c55e",
-  Cancelled: "#ef4444",
+  Pending: "#f5a623",
+  Confirmed: "#60a5fa",
+  Shipped: "#a78bfa",
+  Completed: "#3dd68c",
+  Cancelled: "#e05252",
 };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** { current, previous } counts/sums over the trailing 7-day window vs. the 7 days before that. */
+function windowedTrend<T>(
+  items: T[],
+  getDate: (item: T) => string,
+  getValue: (item: T) => number,
+) {
+  const now = Date.now();
+  let current = 0;
+  let previous = 0;
+  for (const item of items) {
+    const age = now - new Date(getDate(item)).getTime();
+    if (age < 0) continue;
+    if (age <= 7 * DAY_MS) current += getValue(item);
+    else if (age <= 14 * DAY_MS) previous += getValue(item);
+  }
+  return { current, previous, delta: current - previous };
+}
+
+function TrendRow({ delta, good, isCurrency = false }: { delta: number; good: boolean; isCurrency?: boolean }) {
+  const up = delta >= 0;
+  const magnitude = isCurrency ? `$${Math.abs(delta).toFixed(2)}` : String(Math.abs(delta));
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      <span className={`stat-trend ${up ? "up" : "down"} ${good ? "good" : "bad"}`}>
+        {up ? "↑" : "↓"} {up ? "+" : "−"}{magnitude}
+      </span>
+      <span className="stat-trend-note">vs last week</span>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -75,9 +108,19 @@ export default function DashboardPage() {
 
   const lowStock = products.filter((p) => p.isLowStock);
   const pendingOrders = orders.filter((o) => o.status === "Pending");
-  const totalRevenue = orders
-    .filter((o) => o.status !== "Cancelled")
-    .reduce((sum, o) => sum + o.totalAmount, 0);
+  const nonCancelledOrders = orders.filter((o) => o.status !== "Cancelled");
+  const totalRevenue = nonCancelledOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+
+  // Real week-over-week deltas, derived from actual timestamps — not fabricated.
+  // Low Stock has no historical snapshot (it's a live threshold check), so it
+  // intentionally has no trend row rather than a faked one.
+  const productsTrend = windowedTrend(products, (p) => p.createdAt, () => 1);
+  const pendingTrend = windowedTrend(
+    orders.filter((o) => o.status === "Pending"),
+    (o) => o.createdAt,
+    () => 1,
+  );
+  const revenueTrend = windowedTrend(nonCancelledOrders, (o) => o.createdAt, (o) => o.totalAmount);
 
   return (
     <div>
@@ -86,6 +129,7 @@ export default function DashboardPage() {
         <div className="stat-card">
           <span className="stat-label">Total Products</span>
           <span className="stat-value">{products.length}</span>
+          <TrendRow delta={productsTrend.delta} good={productsTrend.delta >= 0} />
         </div>
         <div className="stat-card warning">
           <span className="stat-label">Low Stock Items</span>
@@ -94,10 +138,12 @@ export default function DashboardPage() {
         <div className="stat-card">
           <span className="stat-label">Pending Orders</span>
           <span className="stat-value">{pendingOrders.length}</span>
+          <TrendRow delta={pendingTrend.delta} good={pendingTrend.delta <= 0} />
         </div>
         <div className="stat-card">
           <span className="stat-label">Revenue (non-cancelled)</span>
           <span className="stat-value">${totalRevenue.toFixed(2)}</span>
+          <TrendRow delta={revenueTrend.delta} good={revenueTrend.delta >= 0} isCurrency />
         </div>
       </div>
 
@@ -133,7 +179,7 @@ export default function DashboardPage() {
                 <Bar
                   dataKey="quantity"
                   name="Units in stock"
-                  fill="#2563eb"
+                  fill="#f5a623"
                   radius={[4, 4, 0, 0]}
                 />
               </BarChart>

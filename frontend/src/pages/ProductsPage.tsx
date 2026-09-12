@@ -9,7 +9,8 @@ import {
 } from '../api/products';
 import { createCategory, getCategories } from '../api/categories';
 import { generateProductDescription } from '../api/ai';
-import type { Category, CreateProductRequest, Product } from '../types';
+import { getStockMovements } from '../api/stockMovements';
+import type { Category, CreateProductRequest, Product, StockMovement } from '../types';
 import { useAuth } from '../auth/AuthContext';
 
 function emptyForm(categoryId: number): CreateProductRequest {
@@ -24,6 +25,130 @@ function emptyForm(categoryId: number): CreateProductRequest {
   };
 }
 
+// The schema has no explicit "max stock" field, so the stock-level bar treats
+// 3x the reorder threshold as an implicit healthy ceiling — a display heuristic,
+// not a stored value. Thresholds (10%/30% of that ceiling) mirror the Figma spec.
+function stockLevel(quantityOnHand: number, reorderThreshold: number) {
+  const max = Math.max(reorderThreshold * 3, 1);
+  const pct = Math.min(100, (quantityOnHand / max) * 100);
+  if (quantityOnHand === 0 || pct < 10) return { pct, label: 'Critical', className: 'critical' };
+  if (pct < 30) return { pct, label: 'Low', className: 'low' };
+  return { pct, label: 'Healthy', className: 'healthy' };
+}
+
+const STOCK_BAR_COLOR: Record<string, string> = {
+  critical: '#e05252',
+  low: '#f5a623',
+  healthy: '#3dd68c',
+};
+
+const MOVEMENT_DOT_COLOR: Record<string, string> = {
+  StockIn: '#3dd68c',
+  StockOut: '#e05252',
+  Adjustment: '#60a5fa',
+};
+
+function ProductDetailDrawer({ product, onClose }: { product: Product; onClose: () => void }) {
+  const [movements, setMovements] = useState<StockMovement[]>([]);
+  const [loadingMovements, setLoadingMovements] = useState(true);
+  const level = stockLevel(product.quantityOnHand, product.reorderThreshold);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingMovements(true);
+    getStockMovements({ productId: product.id })
+      .then((data) => {
+        if (!cancelled) setMovements(data.slice(0, 6));
+      })
+      .catch(() => {
+        if (!cancelled) setMovements([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingMovements(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [product.id]);
+
+  return (
+    <div className="drawer-overlay" onClick={onClose}>
+      <div className="drawer-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="drawer-header">
+          <h2>{product.name}</h2>
+          <button className="drawer-close" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <div className="drawer-body">
+          <div>
+            <div className="drawer-field-label">SKU</div>
+            <div className="mono">{product.sku}</div>
+          </div>
+          <div>
+            <div className="drawer-field-label">Category</div>
+            <div>{product.categoryName}</div>
+          </div>
+          {product.description && (
+            <div>
+              <div className="drawer-field-label">Description</div>
+              <div>{product.description}</div>
+            </div>
+          )}
+          <div>
+            <div className="drawer-field-label">Unit Price</div>
+            <div className="mono" style={{ fontSize: '1.1rem', fontWeight: 700 }}>
+              ${product.unitPrice.toFixed(2)}
+            </div>
+          </div>
+          <div>
+            <div className="drawer-field-label">Stock Level</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+              <span className="mono" style={{ fontSize: '1.4rem', fontWeight: 700 }}>
+                {product.quantityOnHand}
+              </span>
+              <span className="minisub">/ {product.reorderThreshold * 3} units (est.)</span>
+            </div>
+            <div className="stock-level">
+              <div className="stock-bar-track">
+                <div
+                  className="stock-bar-fill"
+                  style={{ width: `${level.pct}%`, background: STOCK_BAR_COLOR[level.className] }}
+                />
+              </div>
+              <span className={`stock-pill ${level.className}`}>{level.label}</span>
+            </div>
+          </div>
+          <div>
+            <div className="drawer-field-label">Recent Movements</div>
+            {loadingMovements ? (
+              <p className="minisub">Loading…</p>
+            ) : movements.length === 0 ? (
+              <p className="minisub">No movements recorded.</p>
+            ) : (
+              movements.map((m) => (
+                <div key={m.id} className="drawer-movement-row">
+                  <div className="drawer-movement-dot" style={{ background: MOVEMENT_DOT_COLOR[m.type] }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.8rem' }}>{m.reason || m.type}</div>
+                    <div className="mono minisub" style={{ fontSize: '0.7rem' }}>
+                      {new Date(m.createdAt).toLocaleString()}
+                    </div>
+                  </div>
+                  <span
+                    className="mono"
+                    style={{ fontSize: '0.8rem', fontWeight: 600, color: m.quantity > 0 ? '#3dd68c' : '#e05252' }}
+                  >
+                    {m.quantity > 0 ? '+' : ''}{m.quantity}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProductsPage() {
   const { isAuthenticated, isAdmin } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
@@ -36,6 +161,7 @@ export default function ProductsPage() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   const [generatingDescription, setGeneratingDescription] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   async function refresh() {
     setLoading(true);
@@ -259,6 +385,7 @@ export default function ProductsPage() {
       {loading ? (
         <p>Loading products…</p>
       ) : (
+        <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -266,21 +393,39 @@ export default function ProductsPage() {
               <th>Name</th>
               <th>Category</th>
               <th>Unit Price</th>
-              <th>Qty on Hand</th>
+              <th>Stock Level</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {products.map((p) => (
-              <tr key={p.id} className={!p.isActive ? 'row-inactive' : p.isLowStock ? 'row-warning' : ''}>
-                <td>{p.sku}</td>
-                <td>{p.name}</td>
-                <td>{p.categoryName}</td>
-                <td>${p.unitPrice.toFixed(2)}</td>
-                <td>{p.quantityOnHand}</td>
+            {products.map((p) => {
+              const level = stockLevel(p.quantityOnHand, p.reorderThreshold);
+              return (
+              <tr
+                key={p.id}
+                className={!p.isActive ? 'row-inactive' : p.isLowStock ? 'row-warning' : ''}
+                onClick={() => setSelectedProduct(p)}
+                style={{ cursor: 'pointer' }}
+              >
+                <td className="mono nowrap">{p.sku}</td>
+                <td className="nowrap">{p.name}</td>
+                <td className="nowrap">{p.categoryName}</td>
+                <td className="mono nowrap">${p.unitPrice.toFixed(2)}</td>
+                <td>
+                  <div className="stock-level">
+                    <span className="mono" style={{ minWidth: 28, display: 'inline-block' }}>{p.quantityOnHand}</span>
+                    <div className="stock-bar-track">
+                      <div
+                        className="stock-bar-fill"
+                        style={{ width: `${level.pct}%`, background: STOCK_BAR_COLOR[level.className] }}
+                      />
+                    </div>
+                    <span className={`stock-pill ${level.className}`}>{level.label}</span>
+                  </div>
+                </td>
                 <td>{!p.isActive ? 'Inactive' : p.isLowStock ? '⚠️ Low Stock' : 'OK'}</td>
-                <td className="actions">
+                <td className="actions" onClick={(e) => e.stopPropagation()}>
                   {isAuthenticated ? (
                     <>
                       <Link className="btn small" to={`/stock-movements?productId=${p.id}`}>History</Link>
@@ -303,7 +448,8 @@ export default function ProductsPage() {
                   )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {products.length === 0 && (
               <tr>
                 <td colSpan={7} className="empty-state">No products yet. Create one above.</td>
@@ -311,6 +457,10 @@ export default function ProductsPage() {
             )}
           </tbody>
         </table>
+        </div>
+      )}
+      {selectedProduct && (
+        <ProductDetailDrawer product={selectedProduct} onClose={() => setSelectedProduct(null)} />
       )}
     </div>
   );
