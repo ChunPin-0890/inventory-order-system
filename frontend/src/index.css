@@ -24,6 +24,24 @@
   color-scheme: dark;
 }
 
+/* Light theme, applied via a data-theme attribute on <html> set by ThemeContext
+   (default is dark — see :root above). Accent/status/danger hues stay the same
+   across both themes for brand consistency; only ground/surface/text/border
+   tokens change. */
+:root[data-theme='light'] {
+  --color-bg: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-surface2: #eef0f3;
+  --color-border: #e2e5ea;
+  --color-border-row: #ebedf0;
+  --color-text: #1a1d23;
+  --color-muted: #6b7280;
+  --color-label: #6b7280;
+  --color-warning-bg: rgba(245, 166, 35, 0.1);
+  --color-warning-border: rgba(245, 166, 35, 0.4);
+  color-scheme: light;
+}
+
 .mono { font-family: var(--font-mono); }
 .nowrap { white-space: nowrap; }
 .table-scroll { overflow-x: auto; }
@@ -51,12 +69,96 @@ body {
   border-bottom: 1px solid var(--color-border);
 }
 
-.brand { font-weight: 700; font-size: 1.1rem; }
+.brand { font-weight: 700; font-size: 1.1rem; display: flex; align-items: center; gap: 0.6rem; }
 
-.app-header nav { display: flex; gap: 1.25rem; }
+.app-header nav.desktop-nav { display: flex; gap: 1.25rem; }
 
 .user-info { display: flex; align-items: center; gap: 0.75rem; }
 .user-badge { color: var(--color-muted); font-size: 0.85rem; }
+
+.theme-toggle {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.theme-toggle:hover { opacity: 0.8; }
+
+/* Hamburger button + slide-in sidebar: shown only below the mobile breakpoint,
+   where the horizontal nav no longer fits without wrapping/overlapping. */
+.hamburger-btn {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 760px) {
+  .app-header nav.desktop-nav { display: none; }
+  .hamburger-btn { display: inline-flex; }
+}
+
+.mobile-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  background: rgba(0, 0, 0, 0.5);
+}
+@media (min-width: 761px) {
+  .mobile-sidebar-overlay { display: none !important; }
+}
+
+.mobile-sidebar-panel {
+  width: 260px;
+  max-width: 80vw;
+  height: 100%;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.mobile-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.mobile-sidebar-header .brand { font-size: 1rem; }
+.mobile-sidebar-close { background: none; border: none; color: var(--color-muted); cursor: pointer; font-size: 1.3rem; line-height: 1; }
+
+.mobile-sidebar-panel nav { display: flex; flex-direction: column; padding: 0.5rem 0; }
+.mobile-sidebar-panel .nav-link {
+  padding: 0.7rem 1.25rem;
+  border-bottom: none;
+  border-left: 2px solid transparent;
+}
+.mobile-sidebar-panel .nav-link.active {
+  border-bottom: none;
+  border-left: 2px solid var(--color-primary);
+  background: rgba(245, 166, 35, 0.08);
+}
 
 .login-shell {
   min-height: 100vh;
@@ -330,7 +432,7 @@ body {
   font-family: var(--font-mono);
   background: var(--color-bg);
 }
-.data-table tbody tr:hover { background: #1a1f27; }
+.data-table tbody tr:hover { background: var(--color-surface2); }
 .row-warning { background: rgba(245, 166, 35, 0.06); }
 .empty-state { text-align: center; color: var(--color-muted); padding: 2rem !important; }
 .actions { white-space: nowrap; }

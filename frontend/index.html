@@ -5,6 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>frontend</title>
+    <script>
+      // Set the theme attribute before React mounts / CSS paints, so there's
+      // no flash of the default (dark) theme for a returning light-mode user.
+      (function () {
+        try {
+          var stored = localStorage.getItem('theme');
+          if (stored === 'light') document.documentElement.setAttribute('data-theme', 'light');
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
